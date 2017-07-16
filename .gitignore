@@ -1,0 +1,5 @@
+*.pyc
+.tox
+venv
+pytest_dataplugin.egg-info
+dist/*
