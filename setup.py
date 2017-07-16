@@ -19,7 +19,7 @@ setup(
     description_file = 'README.md',
     author_email = 'dan@woz.io',
     url = 'https://github.com/dwoz/pytest-dataplugin',
-    download_url = 'https://github.com/dwoz/pytest-dataplugin/archive/0.0.2rc4.tar.gz',
+    download_url = 'https://github.com/dwoz/pytest-dataplugin/archive/0.0.0rc1.tar.gz',
     bugtrack_url = 'https://github.com/dwoz/pytest-dataplugin/issues',
     keywords = [
         'testing', 'pytest', 'plugin', 'fixture',
