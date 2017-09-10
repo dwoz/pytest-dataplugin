@@ -54,6 +54,10 @@ collect_ignore = []
 tw = py.io.TerminalWriter(sys.stderr)
 
 
+
+class SignatureNotFound(Exception):
+    'Raised when there is no signature in the ini file'
+
 def shasum(filename):
     """
     Return the sha1 checksum of the file at location 'filename'
@@ -205,7 +209,6 @@ def transfer(src, dst):
             break
         dst.write(chunk)
 
-
 def update_signature(newsig, origpath, signature_re):
     """
     Update the archive signature in the doc string of this file.
@@ -213,12 +216,16 @@ def update_signature(newsig, origpath, signature_re):
     basename = os.path.basename(origpath)
     dirname = os.path.dirname(origpath)
     tmppath = os.path.join(dirname, '.' + basename)
+    found = False
     with open(origpath) as fp:
         with open(tmppath, 'w') as nfp:
             for line in fp:
                 if signature_re.search(line):
                     line = 'dataplugin-signature = {}\n'.format(newsig)
+                    found = True
                 nfp.write(line)
+    if not found:
+        raise SignatureNotFound("Signature not found in config")
     os.rename(tmppath, origpath)
 
 
@@ -226,6 +233,7 @@ def download_archive():
     """
     Download the test data archive
     """
+    # TODO: Fix this
     from urlio import path
     path.SMB_USER = STATE['smbuser']
     path.SMB_PASS = STATE['smbpass']
@@ -364,11 +372,11 @@ def pytest_runtestloop(session):
                         dst.write(chunk)
         else:
             pass
-        update_signature(
-            shasum(STATE['filename']),
-            STATE['inifile'],
-            STATE['signature_re'],
-        )
+        #update_signature(
+        #    shasum(STATE['filename']),
+        #    STATE['inifile'],
+        #    STATE['signature_re'],
+        #)
         tw.line(
             "Uploaded archive {} with hash {}".format(
                 STATE['filename'], STATE['signature']
@@ -376,11 +384,15 @@ def pytest_runtestloop(session):
             green=True,
         )
         STATE['return_code'] = 0
-        update_signature(
-            shasum(STATE['filename']),
-            STATE['inifile'],
-            STATE['signature_re'],
-        )
+        try:
+            update_signature(
+                shasum(STATE['filename']),
+                STATE['inifile'],
+                STATE['signature_re'],
+            )
+        except SignatureNotFound:
+            tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
+            return True
         tw.line(
             "Signature updated, you may want to commit the changes too: {}".format(
                 os.path.basename(STATE['inifile'])
