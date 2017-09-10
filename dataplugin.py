@@ -7,9 +7,12 @@ import tarfile
 from functools import partial
 import re
 import py
-from urlparse import urlparse
 import pytest
 
+try:
+    from urllib.parse import urlparse
+except:
+    from urlparse import urlparse
 try:
     import pysmb
 except ImportError:
@@ -54,9 +57,9 @@ collect_ignore = []
 tw = py.io.TerminalWriter(sys.stderr)
 
 
-
 class SignatureNotFound(Exception):
     'Raised when there is no signature in the ini file'
+
 
 def shasum(filename):
     """
@@ -209,6 +212,7 @@ def transfer(src, dst):
             break
         dst.write(chunk)
 
+
 def update_signature(newsig, origpath, signature_re):
     """
     Update the archive signature in the doc string of this file.
@@ -318,18 +322,38 @@ def pytest_sessionstart(session):
     # collect_ignore.extend('*')
     # return True
 
-
 def pytest_collectstart(collector):
-    pass
+    if STATE['action'] == NOOP:
+        return
+    tw.line("dataplugin {} invoked, skipping collection.".format(STATE['action']), bold=True)
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collectreport(report):
+    if STATE['action'] == NOOP:
+        return
+    return True
+
+
+def pytest_ignore_collect(path, config):
+    if STATE['action'] == NOOP:
+        return
+    # Causes pytest to skip printing 'collecting x items' and
+    # 'collected xitems' lines.
+    config.option.verbose = -1
+    return True
+
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(session, config, items):
     if STATE['action'] == NOOP:
         return
-    tw.line("dataplugin invoked, skipping test run.", bold=True)
+    #tw.line("skipping test run.", bold=True)
+    return True
+
 
 def iterchunks(fp, size):
     for chunk in iter(partial(fp.read, size), ''):
         yield chunk
+
 
 def pytest_runtestloop(session):
     if STATE['action'] == NOOP:
@@ -351,6 +375,7 @@ def pytest_runtestloop(session):
                 green=True
             )
             STATE['return_code'] = 0
+            return True
         else:
             tw.line("Directory does not exist {}".format(abspath), red=True)
             return True
