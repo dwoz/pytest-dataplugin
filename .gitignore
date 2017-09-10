@@ -3,3 +3,6 @@
 venv
 pytest_dataplugin.egg-info
 dist/*
+
+# pytest cache dir
+.cache

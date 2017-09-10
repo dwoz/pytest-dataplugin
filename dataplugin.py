@@ -8,6 +8,7 @@ from functools import partial
 import re
 import py
 from urlparse import urlparse
+import pytest
 
 try:
     import pysmb
@@ -35,8 +36,8 @@ STATE = {
     'signature_re': None,
     'inifile': None,
     'return_code': 0,
+    'tests_disabled': False,
 }
-
 ACTIONS = (
     'create',
     'extract',
@@ -45,12 +46,12 @@ ACTIONS = (
     'verify',
 )
 
+
 DEFAULT_INFO = tarfile.TarInfo()
 _writer_mode = 'w'
 _reader_mode = 'r:gz'
 collect_ignore = []
 tw = py.io.TerminalWriter(sys.stderr)
-
 
 
 def shasum(filename):
@@ -280,6 +281,9 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    STATE['directory'] = config.inicfg.get(
+        'dataplugin-directory', os.path.join(str(config.rootdir), 'data')
+    )
     STATE['signature'] = config.inicfg.get('dataplugin-signature')
     STATE['location'] = config.inicfg.get('dataplugin-location', STATE['location'])
     STATE['filename'] = os.path.basename(STATE['location'])
@@ -300,17 +304,20 @@ def pytest_sessionstart(session):
     """ before session.main() is called. """
     if STATE['action'] == NOOP:
         return
-    #print(repr(session.config.inifile))
-    #print(dir(session.config))
-    #sys.exit()
-    #collect_ignore.extend('*')
+    # print(repr(session.config.inifile))
+    # print(dir(session.config))
+    # sys.exit()
+    # collect_ignore.extend('*')
+    # return True
 
 
 def pytest_collectstart(collector):
+    pass
+
+def pytest_collection_modifyitems(session, config, items):
     if STATE['action'] == NOOP:
         return
     tw.line("dataplugin invoked, skipping test run.", bold=True)
-
 
 def iterchunks(fp, size):
     for chunk in iter(partial(fp.read, size), ''):
@@ -321,15 +328,24 @@ def pytest_runtestloop(session):
         return
     STATE['return_code'] = 1
     if STATE['action'] == 'create':
-        tw.line("Creating archive: {}".format(STATE['filename']), bold=True)
-        sha1 = create_archive('.' + STATE['filename'], STATE['directory'])
-        tw.line(
-            "Archive createded, name is {} and hash is {}".format(
-                STATE['filename'], sha1
-            ),
-            green=True
-        )
-        STATE['return_code'] = 0
+        abspath = os.path.abspath(STATE['directory'])
+        if os.path.exists(abspath):
+            tw.line(
+                "Creating archive {} from directory {}".format(
+                    STATE['filename'], abspath
+                ), bold=True
+            )
+            sha1 = create_archive('.' + STATE['filename'], abspath)
+            tw.line(
+                "Archive createded, name is {} and hash is {}".format(
+                    STATE['filename'], sha1
+                ),
+                green=True
+            )
+            STATE['return_code'] = 0
+        else:
+            tw.line("Directory does not exist {}".format(abspath), red=True)
+            return True
     elif STATE['action'] == 'extract':
         sha1 = extract_archive('.' + STATE['filename'], STATE['directory'])
         tw.line(
