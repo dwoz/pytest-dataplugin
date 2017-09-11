@@ -27,6 +27,7 @@ except ImportError:
 else:
     HAS_BOTO = True
 
+
 SIGNATURE_RE = '^.*dataplugin-signature.*=.*$'
 NOOP = '_dataplugin_NOOP'
 STATE = {
@@ -262,10 +263,17 @@ def download_archive():
     src.close()
 
 
-class Arg(object):
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
+# pytest handler order:
+#   - pytest_addoption
+#   - pytest_cmdline_preparse
+#   - pytest_configure
+#   - pytest_sessionstart
+#   - pytest_collectstart
+#   - pytest_collectreport
+#   - pytest_collection_modifyitems
+#   - ipytest_runtestloop
+#   - pytest_sessionfinish
+#   - pytest_terminal_summary
 
 
 def pytest_addoption(parser):
@@ -474,8 +482,14 @@ def pytest_sessionfinish(session, exitstatus):
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_terminal_summary(terminalreporter, exitstatus):
+    '''
+    Setting terminalreporter.verbosity = -2 prevents summary_stats_line from
+    being shown.  Without this there is an extra 'no tests ran in 0.00 seconds'
+    line added dataplugin invocation output.
+    '''
     if STATE['action'] == NOOP:
         return
+    terminalreporter.verbosity = -2
     #sys.exit(STATE['return_code'])
 
 
