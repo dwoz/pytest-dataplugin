@@ -1,4 +1,5 @@
 import sys
+import io
 import os
 import gzip
 import shutil
@@ -67,7 +68,7 @@ def shasum(filename):
     """
     import hashlib
     hsh = hashlib.sha1()
-    with open(filename, 'rb') as fp:
+    with io.open(filename, 'rb') as fp:
         while True:
             chunk = fp.read(1024 * 100)
             if not chunk:
@@ -112,7 +113,7 @@ class ConsistantArchiveReader(object):
     def sha1(self, filename=None):
         filename = filename or self.archivefile
         hsh = hashlib.sha1()
-        with open(filename, 'rb') as fp:
+        with io.open(filename, 'rb') as fp:
             while True:
                 chunk = fp.read(1024 * 100)
                 if not chunk:
@@ -144,10 +145,13 @@ class ConsistantArchiveWriter(object):
         if not _thisdir:
             _thisdir = root
         for dirname, dirs, files in os.walk(_thisdir):
+            print('archive', dirname, dirs, files)
             for filename in sorted(files):
                 with open(os.path.join(dirname, filename), 'rb') as fp:
                     info = self.sanitize_info(self.tar.gettarinfo(fileobj=fp))
-                    newname = info.name.split(root, 1)[-1].lstrip('/')
+                    # TODO: Why would we expect one or other not to have
+                    # leading slash, fix this upstream.
+                    newname = info.name.lstrip('/').split(root.lstrip('/'), 1)[-1].lstrip('/')
                     info.name = newname
                     self.tar.addfile(info, fp)
             for d in sorted(dirs):
@@ -211,6 +215,17 @@ def transfer(src, dst):
         if not chunk:
             break
         dst.write(chunk)
+
+
+def find_signature(path, signature_re):
+    with io.open(path, 'r') as fp:
+        for line in fp:
+            if signature_re.search(line):
+                found = True
+                break
+        else:
+            return False
+    return True
 
 
 def update_signature(newsig, origpath, signature_re):
@@ -299,7 +314,7 @@ def pytest_configure(config):
     STATE['signature'] = config.inicfg.get('dataplugin-signature')
     STATE['location'] = config.inicfg.get('dataplugin-location', STATE['location'])
     STATE['filename'] = os.path.basename(STATE['location'])
-    STATE['inifile'] = str(config.inifile)
+    STATE['inifile'] = config.inifile
     STATE['signature_re'] = re.compile(SIGNATURE_RE)
     for action in ACTIONS:
         if getattr(config.option, 'dataplugin_{}'.format(action), False):
@@ -327,6 +342,7 @@ def pytest_collectstart(collector):
         return
     tw.line("dataplugin {} invoked, skipping collection.".format(STATE['action']), bold=True)
 
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collectreport(report):
     if STATE['action'] == NOOP:
@@ -337,21 +353,19 @@ def pytest_collectreport(report):
 def pytest_ignore_collect(path, config):
     if STATE['action'] == NOOP:
         return
-    # Causes pytest to skip printing 'collecting x items' and
-    # 'collected xitems' lines.
     config.option.verbose = -1
     return True
+
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(session, config, items):
     if STATE['action'] == NOOP:
         return
-    #tw.line("skipping test run.", bold=True)
     return True
 
 
 def iterchunks(fp, size):
-    for chunk in iter(partial(fp.read, size), ''):
+    for chunk in iter(partial(fp.read, size), b''):
         yield chunk
 
 
@@ -389,19 +403,22 @@ def pytest_runtestloop(session):
         )
         STATE['return_code'] = 0
     elif STATE['action'] == 'upload':
+        if STATE['inifile'] is None:
+            tw.line("No ini file configured.", red=True)
+            return True
+        elif not find_signature(str(STATE['inifile']), STATE['signature_re']):
+            tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
+            return True
         urlprs = urlparse(STATE['location'])
         if not urlprs.scheme:
-            with open('.' + STATE['filename'], 'rb') as src:
-                with open(STATE['location'], 'wb') as dst:
+            tw.line("Storing local archive: {}".format(STATE['location']), bold=True)
+            with io.open('.' + STATE['filename'], 'rb') as src:
+                with io.open(STATE['location'], 'wb') as dst:
                     for chunk in iterchunks(src, 1024 * 100):
                         dst.write(chunk)
         else:
             pass
-        #update_signature(
-        #    shasum(STATE['filename']),
-        #    STATE['inifile'],
-        #    STATE['signature_re'],
-        #)
+        STATE['signature'] = shasum(STATE['filename'])
         tw.line(
             "Uploaded archive {} with hash {}".format(
                 STATE['filename'], STATE['signature']
@@ -409,18 +426,14 @@ def pytest_runtestloop(session):
             green=True,
         )
         STATE['return_code'] = 0
-        try:
-            update_signature(
-                shasum(STATE['filename']),
-                STATE['inifile'],
-                STATE['signature_re'],
-            )
-        except SignatureNotFound:
-            tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
-            return True
+        update_signature(
+            STATE['signature'],
+            str(STATE['inifile']),
+            STATE['signature_re'],
+        )
         tw.line(
             "Signature updated, you may want to commit the changes too: {}".format(
-                os.path.basename(STATE['inifile'])
+                os.path.basename(str(STATE['inifile']))
             ),
             green=True
         )
@@ -437,11 +450,19 @@ def pytest_runtestloop(session):
             STATE['return_code'] = 1
 
 
+@pytest.hookimpl(tryfirst=True)
 def pytest_sessionfinish(session, exitstatus):
     """ whole test run finishes. """
     if STATE['action'] == NOOP:
         return
-    sys.exit(STATE['return_code'])
+    return True
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_terminal_summary(terminalreporter, exitstatus):
+    if STATE['action'] == NOOP:
+        return
+    #sys.exit(STATE['return_code'])
 
 
 class FileBackend(object):

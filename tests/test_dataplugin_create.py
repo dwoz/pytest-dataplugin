@@ -41,8 +41,8 @@ def test_create_without_dir(testdir):
     for line, exp in zip(result.errlines, errlines):
         assert line.startswith(exp)
     last_outline = 'plugins: dataplugin-'
-    assert result.outlines[-1].startswith(last_outline)
-    assert result.ret == 1
+    assert result.outlines[-3].startswith(last_outline)
+    assert result.ret == 5
 
 
 def test_create_with_dir(testdir):
@@ -51,4 +51,5 @@ def test_create_with_dir(testdir):
     result = testdir.runpytest_subprocess('--dataplugin-create')
     ERRLINES = 'Archive createded, name is test-data.tar.gz and hash is 39e2bc4a67e0336eb6bdf17bdd7bf8a1671dd9a7'
     assert result.errlines[-1] == ERRLINES
-    assert result.outlines[-1].startswith('plugins: dataplugin-')
+    print(result.outlines[-3])
+    assert result.outlines[-4].startswith('plugins: dataplugin-')
