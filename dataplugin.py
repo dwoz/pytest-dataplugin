@@ -416,8 +416,8 @@ def pytest_runtestloop(session):
                 with io.open(STATE['location'], 'wb') as dst:
                     for chunk in iterchunks(src, 1024 * 100):
                         dst.write(chunk)
-        else:
-            pass
+        # else:
+        #     pass
         STATE['signature'] = shasum(STATE['filename'])
         tw.line(
             "Uploaded archive {} with hash {}".format(
@@ -438,7 +438,21 @@ def pytest_runtestloop(session):
             green=True
         )
     elif STATE['action'] == 'download':
-        download_archive()
+        if STATE['inifile'] is None:
+            tw.line("No ini file configured.", red=True)
+            return True
+        elif not find_signature(str(STATE['inifile']), STATE['signature_re']):
+            tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
+            return True
+        urlprs = urlparse(STATE['location'])
+        if not urlprs.scheme:
+            tw.line("Storing local archive: {}".format(STATE['location']), bold=True)
+            with io.open(STATE['location'], 'rb') as src:
+                with io.open('.' + STATE['filename'], 'wb') as dst:
+                    for chunk in iterchunks(src, 1024 * 100):
+                        dst.write(chunk)
+        # else:
+        #     download_archive()
         tw.line("file downloaded", green=True)
         STATE['return_code'] = 0
     else:
@@ -465,60 +479,60 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
     #sys.exit(STATE['return_code'])
 
 
-class FileBackend(object):
-
-    def __init__(self):
-        pass
-    def fetch(self):
-        pass
-    def put(self):
-        pass
-
-
-def smb_connection():
-    global USE_NTLM, MACHINE_NAME
-
-    host = req.get_host()
-    if not host:
-        raise urllib2.URLError('SMB error: no host given')
-    host, port = splitport(host)
-    if port is None:
-        port = 139
-    else:
-        port = int(port)
-
-    # username/password handling
-    user, host = splituser(host)
-    if user:
-        user, passwd = splitpasswd(user)
-    else:
-        passwd = None
-    host = unquote(host)
-    user = user or ''
-
-    domain = ''
-    if ';' in user:
-        domain, user = user.split(';', 1)
-
-    passwd = passwd or ''
-    myname = MACHINE_NAME or self.generateClientMachineName()
-
-    n = NetBIOS()
-    names = n.queryIPForName(host)
-    if names:
-        server_name = names[0]
-    else:
-        raise urllib2.URLError('SMB error: Hostname does not reply back with its machine name')
-
-    path, attrs = splitattr(req.get_selector())
-    if path.startswith('/'):
-        path = path[1:]
-    dirs = path.split('/')
-    dirs = map(unquote, dirs)
-    service, path = dirs[0], '/'.join(dirs[1:])
-
-    try:
-        conn = SMBConnection(user, passwd, myname, server_name, domain=domain, use_ntlm_v2 = USE_NTLM)
-        conn.connect(host, port)
-    except:
-        pass
+# class FileBackend(object):
+# 
+#     def __init__(self):
+#         pass
+#     def fetch(self):
+#         pass
+#     def put(self):
+#         pass
+# 
+# 
+# def smb_connection():
+#     global USE_NTLM, MACHINE_NAME
+# 
+#     host = req.get_host()
+#     if not host:
+#         raise urllib2.URLError('SMB error: no host given')
+#     host, port = splitport(host)
+#     if port is None:
+#         port = 139
+#     else:
+#         port = int(port)
+# 
+#     # username/password handling
+#     user, host = splituser(host)
+#     if user:
+#         user, passwd = splitpasswd(user)
+#     else:
+#         passwd = None
+#     host = unquote(host)
+#     user = user or ''
+# 
+#     domain = ''
+#     if ';' in user:
+#         domain, user = user.split(';', 1)
+# 
+#     passwd = passwd or ''
+#     myname = MACHINE_NAME or self.generateClientMachineName()
+# 
+#     n = NetBIOS()
+#     names = n.queryIPForName(host)
+#     if names:
+#         server_name = names[0]
+#     else:
+#         raise urllib2.URLError('SMB error: Hostname does not reply back with its machine name')
+# 
+#     path, attrs = splitattr(req.get_selector())
+#     if path.startswith('/'):
+#         path = path[1:]
+#     dirs = path.split('/')
+#     dirs = map(unquote, dirs)
+#     service, path = dirs[0], '/'.join(dirs[1:])
+# 
+#     try:
+#         conn = SMBConnection(user, passwd, myname, server_name, domain=domain, use_ntlm_v2 = USE_NTLM)
+#         conn.connect(host, port)
+#     except:
+#         pass

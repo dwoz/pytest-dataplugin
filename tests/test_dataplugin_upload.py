@@ -25,4 +25,3 @@ def test_dataplugin_update_with_pytest_ini(testdir):
         'Uploaded archive test-data.tar.gz with hash 2479d9203e1f4a326fd2cb49c66ab0904ebbd54c',
         'Signature updated, you may want to commit the changes too: pytest.ini',
     ]
-    assert result.outlines[-3].startswith('plugins: dataplugin-')

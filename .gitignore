@@ -6,3 +6,6 @@ dist/*
 
 # pytest cache dir
 .cache
+
+#Coverage reports
+.coverage

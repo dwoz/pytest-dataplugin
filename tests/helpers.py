@@ -1,3 +1,4 @@
+import os
 import pytest
 import dataplugin
 
@@ -11,16 +12,18 @@ def test_truth_b():
     assert True == True
 """
 
+default_files = {('txt', 'test-data-file'): 'test data content'}
 
-def create_test_archive(testdir):
+def create_test_archive(testdir, archive='.test-data.tar.gz', path='data', files=None):
     '''
     Create a dataplugin archive file in a testdir (see pytester plugin docs)
     '''
-    p = testdir.tmpdir.join('data/test-data-file').new(ext='txt')
-    p.dirpath().ensure_dir()
-    p.write('test data content')
-    datapath = str(testdir.tmpdir.join('data'))
-    dataplugin.create_archive('.test-data.tar.gz', datapath)
+    if files is None:
+        files = default_files
+    for (ext, name), content in files.items():
+        testdir.makefile(ext, **{os.path.join(path, name): content})
+    datapath = str(testdir.tmpdir.join(path))
+    dataplugin.create_archive(archive, datapath)
 
 
 def print_result(result):
@@ -33,5 +36,3 @@ def print_result(result):
     for line in result.outlines:
         print(line)
     print(header + ' end stdout ' + header)
-
-
