@@ -2,23 +2,11 @@ import pytest
 import platform
 from contextlib import contextmanager
 from _pytest.capture import MultiCapture, SysCapture
-
-
-PYTESTFILE = """
-def test_truth():
-    assert True == True
-def test_truth_a():
-    assert True == True
-def test_truth_b():
-    assert True == True
-"""
+from helpers import PYTESTFILE
 
 
 def test_dataplugin_added_to_plugins(testdir):
     'Check that dataplugin is added to plugins via pytest_plugins'
-    #testdir.makeconftest("""
-    #    import pytest
-    #""")
     testdir.makepyfile(PYTESTFILE)
     config = testdir.parseconfig()
     plugin_names = []
@@ -51,5 +39,4 @@ def test_create_with_dir(testdir):
     result = testdir.runpytest_subprocess('--dataplugin-create')
     ERRLINES = 'Archive createded, name is test-data.tar.gz and hash is 39e2bc4a67e0336eb6bdf17bdd7bf8a1671dd9a7'
     assert result.errlines[-1] == ERRLINES
-    print(result.outlines[-3])
     assert result.outlines[-4].startswith('plugins: dataplugin-')
