@@ -28,6 +28,19 @@ else:
     HAS_BOTO = True
 
 
+# pytest handler order:
+#   - pytest_addoption
+#   - pytest_cmdline_preparse
+#   - pytest_configure
+#   - pytest_sessionstart
+#   - pytest_collectstart
+#   - pytest_collectreport
+#   - pytest_collection_modifyitems
+#   - ipytest_runtestloop
+#   - pytest_sessionfinish
+#   - pytest_terminal_summary
+
+
 SIGNATURE_RE = '^.*dataplugin-signature.*=.*$'
 NOOP = '_dataplugin_NOOP'
 STATE = {
@@ -64,9 +77,9 @@ class SignatureNotFound(Exception):
 
 
 def shasum(filename):
-    """
+    '''
     Return the sha1 checksum of the file at location 'filename'
-    """
+    '''
     import hashlib
     hsh = hashlib.sha1()
     with io.open(filename, 'rb') as fp:
@@ -78,25 +91,31 @@ def shasum(filename):
     return hsh.hexdigest()
 
 
+def checkignore(path):
+    'Check if a file is ignored by .gitignore'
+    import subprocess
+    return 0 == subprocess.call(['git', 'check-ignore', path])
+
+
 def verify_data_archive(filename, signature):
-    """
+    '''
     True when the sha1 of the file meats that of the signature arg.
-    """
+    '''
     return shasum(filename) == signature
 
 
 class ConsistantArchiveReader(object):
-    """
+    '''
     Read the archive and extract it's contents to a directory without setting
     any times or permissions.
-    """
+    '''
 
     def __init__(self, archivefile, _mode=_reader_mode):
         self.archivefile = archivefile
         self.tar = tarfile.open(self.archivefile, mode=_reader_mode)
 
     def extract_to_directory(self, root):
-        #tar = tarfile.TarFile(self.archivefile, fileobj=self.gz)
+        # tar = tarfile.TarFile(self.archivefile, fileobj=self.gz)
         for fileinfo in self.tar:
             filedir = os.path.dirname(fileinfo.name)
             if filedir:
@@ -124,7 +143,7 @@ class ConsistantArchiveReader(object):
 
 
 class ConsistantArchiveWriter(object):
-    """
+    '''
     Create an gziped tar archive that will have a consistant hash as long as
     the contents do file contents do not change. This is accomplished doing the
     following.
@@ -135,7 +154,7 @@ class ConsistantArchiveWriter(object):
         modified time on each file.
       - Use the same timstamp as the modified time of the archived files for
         the gzip file header.
-    """
+    '''
 
     def __init__(self, archivefile, default_info=DEFAULT_INFO, _mode=_writer_mode):
         self.archivefile = archivefile
@@ -185,9 +204,9 @@ class ConsistantArchiveWriter(object):
 
 
 def create_archive(output_name, archive_directory):
-    """
+    '''
     Create an archive and return it's signature
-    """
+    '''
     archiver = ConsistantArchiveWriter(output_name)
     archiver.add_directory(archive_directory)
     sha1 = archiver.close()
@@ -195,9 +214,9 @@ def create_archive(output_name, archive_directory):
 
 
 def extract_archive(input_name, output_directory):
-    """
+    '''
     Extract the archive
-    """
+    '''
     archiver = ConsistantArchiveReader(input_name)
     sha1 = archiver.sha1()
     archiver.extract_to_directory(output_directory)
@@ -206,9 +225,9 @@ def extract_archive(input_name, output_directory):
 
 
 def transfer(src, dst):
-    """
+    '''
     Copy the src to the dst
-    """
+    '''
     if dst.exists():
         dst.remove()
     while True:
@@ -230,9 +249,9 @@ def find_signature(path, signature_re):
 
 
 def update_signature(newsig, origpath, signature_re):
-    """
+    '''
     Update the archive signature in the doc string of this file.
-    """
+    '''
     basename = os.path.basename(origpath)
     dirname = os.path.dirname(origpath)
     tmppath = os.path.join(dirname, '.' + basename)
@@ -250,9 +269,9 @@ def update_signature(newsig, origpath, signature_re):
 
 
 def download_archive():
-    """
+    '''
     Download the test data archive
-    """
+    '''
     # TODO: Fix this
     from urlio import path
     path.SMB_USER = STATE['smbuser']
@@ -262,18 +281,6 @@ def download_archive():
     dst.close()
     src.close()
 
-
-# pytest handler order:
-#   - pytest_addoption
-#   - pytest_cmdline_preparse
-#   - pytest_configure
-#   - pytest_sessionstart
-#   - pytest_collectstart
-#   - pytest_collectreport
-#   - pytest_collection_modifyitems
-#   - ipytest_runtestloop
-#   - pytest_sessionfinish
-#   - pytest_terminal_summary
 
 
 def pytest_addoption(parser):
@@ -315,6 +322,12 @@ def pytest_addoption(parser):
     )
 
 
+def pytest_cmdline_preparse(config, args):
+    # TODO: Update opts to show config and environment defaults
+    # print(config.inifile)
+    pass
+
+
 def pytest_configure(config):
     STATE['directory'] = config.inicfg.get(
         'dataplugin-directory', os.path.join(str(config.rootdir), 'data')
@@ -336,14 +349,9 @@ def pytest_configure(config):
 
 
 def pytest_sessionstart(session):
-    """ before session.main() is called. """
     if STATE['action'] == NOOP:
         return
-    # print(repr(session.config.inifile))
-    # print(dir(session.config))
-    # sys.exit()
-    # collect_ignore.extend('*')
-    # return True
+
 
 def pytest_collectstart(collector):
     if STATE['action'] == NOOP:
@@ -480,6 +488,13 @@ def pytest_sessionfinish(session, exitstatus):
     return True
 
 
+# def pytest_report_collectionfinish(config, startdir, items):
+#     print(config.option.verbose)
+#
+# def pytest_report_teststatus(report):
+#     print(dir(report))
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_terminal_summary(terminalreporter, exitstatus):
     '''
@@ -494,18 +509,18 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
 
 
 # class FileBackend(object):
-# 
+#
 #     def __init__(self):
 #         pass
 #     def fetch(self):
 #         pass
 #     def put(self):
 #         pass
-# 
-# 
+#
+#
 # def smb_connection():
 #     global USE_NTLM, MACHINE_NAME
-# 
+#
 #     host = req.get_host()
 #     if not host:
 #         raise urllib2.URLError('SMB error: no host given')
@@ -514,7 +529,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
 #         port = 139
 #     else:
 #         port = int(port)
-# 
+#
 #     # username/password handling
 #     user, host = splituser(host)
 #     if user:
@@ -523,28 +538,28 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
 #         passwd = None
 #     host = unquote(host)
 #     user = user or ''
-# 
+#
 #     domain = ''
 #     if ';' in user:
 #         domain, user = user.split(';', 1)
-# 
+#
 #     passwd = passwd or ''
 #     myname = MACHINE_NAME or self.generateClientMachineName()
-# 
+#
 #     n = NetBIOS()
 #     names = n.queryIPForName(host)
 #     if names:
 #         server_name = names[0]
 #     else:
 #         raise urllib2.URLError('SMB error: Hostname does not reply back with its machine name')
-# 
+#
 #     path, attrs = splitattr(req.get_selector())
 #     if path.startswith('/'):
 #         path = path[1:]
 #     dirs = path.split('/')
 #     dirs = map(unquote, dirs)
 #     service, path = dirs[0], '/'.join(dirs[1:])
-# 
+#
 #     try:
 #         conn = SMBConnection(user, passwd, myname, server_name, domain=domain, use_ntlm_v2 = USE_NTLM)
 #         conn.connect(host, port)
