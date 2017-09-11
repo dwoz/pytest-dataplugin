@@ -47,5 +47,5 @@ def test_create_without_dir(testdir):
     ]
     for line, exp in zip(result.errlines, errlines):
         assert line.startswith(exp)
-    assert result.outlines[-1].startswith('plugins: dataplugin-')
-    assert result.ret == 1
+    assert result.outlines[-3].startswith('plugins: dataplugin-')
+    assert result.ret == 5
