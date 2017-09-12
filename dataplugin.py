@@ -2,10 +2,9 @@
 pytest-dataplugin
 
 The dataplugin allows you to manage a directory of test data that lives outside
-your main code repository. The plugin targets the use case of when test data is
-larger than what you'd want to store with your code or otherwise contains
-things like binary data that doesn't makes sense to store with the main code
-repository.
+your main code repository. The use case for this plugin is when test data is
+larger than what you want to store with your code or test data that otherwise
+doesn't make sense to store with the code (binary data might be one example).
 
 The test data directory can be ignored by git. The plugin creates an archive
 with a consistant hash. This hash is intended to be stored in file that gets
