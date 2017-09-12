@@ -9,13 +9,14 @@ from functools import partial
 import re
 import py
 import pytest
+import urllib2
 
 try:
     from urllib.parse import urlparse
 except:
     from urlparse import urlparse
 try:
-    import pysmb
+    import smb.SMBHandler
 except ImportError:
     HAS_PYSMB = False
 else:
@@ -72,8 +73,16 @@ collect_ignore = []
 tw = py.io.TerminalWriter(sys.stderr)
 
 
-class SignatureNotFound(Exception):
-    'Raised when there is no signature in the ini file'
+class DataPluginException(Exception):
+    '''
+    Base exception class for all dataplugin exceptions.
+    '''
+
+
+class SignatureNotFound(DataPluginException):
+    '''
+    Raised when there is no signature in the ini file
+    '''
 
 
 def shasum(filename):
@@ -224,19 +233,6 @@ def extract_archive(input_name, output_directory):
     return sha1
 
 
-def transfer(src, dst):
-    '''
-    Copy the src to the dst
-    '''
-    if dst.exists():
-        dst.remove()
-    while True:
-        chunk = src.read(1024 * 1024)
-        if not chunk:
-            break
-        dst.write(chunk)
-
-
 def find_signature(path, signature_re):
     with io.open(path, 'r') as fp:
         for line in fp:
@@ -266,21 +262,6 @@ def update_signature(newsig, origpath, signature_re):
     if not found:
         raise SignatureNotFound("Signature not found in config")
     os.rename(tmppath, origpath)
-
-
-def download_archive():
-    '''
-    Download the test data archive
-    '''
-    # TODO: Fix this
-    from urlio import path
-    path.SMB_USER = STATE['smbuser']
-    path.SMB_PASS = STATE['smbpass']
-    src = Path(CONIFG['data_location'], mode='wb')
-    transfer(src, dst)
-    dst.close()
-    src.close()
-
 
 
 def pytest_addoption(parser):
@@ -425,23 +406,16 @@ def pytest_runtestloop(session):
         elif not find_signature(str(STATE['inifile']), STATE['signature_re']):
             tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
             return True
-        urlprs = urlparse(STATE['location'])
-        if not urlprs.scheme:
-            tw.line("Storing local archive: {}".format(STATE['location']), bold=True)
-            with io.open('.' + STATE['filename'], 'rb') as src:
-                with io.open(STATE['location'], 'wb') as dst:
-                    for chunk in iterchunks(src, 1024 * 100):
-                        dst.write(chunk)
-        # else:
-        #     pass
-        STATE['signature'] = shasum(STATE['filename'])
+        cache_filename = '.' + STATE['filename']
+        transfer_file(STATE['location'], cache_filename, UPLOADERS)
+        STATE['signature'] = shasum(cache_filename)
+        STATE['return_code'] = 0
         tw.line(
             "Uploaded archive {} with hash {}".format(
                 STATE['filename'], STATE['signature']
             ),
             green=True,
         )
-        STATE['return_code'] = 0
         update_signature(
             STATE['signature'],
             str(STATE['inifile']),
@@ -460,15 +434,7 @@ def pytest_runtestloop(session):
         elif not find_signature(str(STATE['inifile']), STATE['signature_re']):
             tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
             return True
-        urlprs = urlparse(STATE['location'])
-        if not urlprs.scheme:
-            tw.line("Storing local archive: {}".format(STATE['location']), bold=True)
-            with io.open(STATE['location'], 'rb') as src:
-                with io.open('.' + STATE['filename'], 'wb') as dst:
-                    for chunk in iterchunks(src, 1024 * 100):
-                        dst.write(chunk)
-        # else:
-        #     download_archive()
+        transfer_file(STATE['location'], '.' + STATE['filename'], DOWNLOADERS)
         tw.line("file downloaded", green=True)
         STATE['return_code'] = 0
     else:
@@ -508,60 +474,68 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
     #sys.exit(STATE['return_code'])
 
 
-# class FileBackend(object):
-#
-#     def __init__(self):
-#         pass
-#     def fetch(self):
-#         pass
-#     def put(self):
-#         pass
-#
-#
-# def smb_connection():
-#     global USE_NTLM, MACHINE_NAME
-#
-#     host = req.get_host()
-#     if not host:
-#         raise urllib2.URLError('SMB error: no host given')
-#     host, port = splitport(host)
-#     if port is None:
-#         port = 139
-#     else:
-#         port = int(port)
-#
-#     # username/password handling
-#     user, host = splituser(host)
-#     if user:
-#         user, passwd = splitpasswd(user)
-#     else:
-#         passwd = None
-#     host = unquote(host)
-#     user = user or ''
-#
-#     domain = ''
-#     if ';' in user:
-#         domain, user = user.split(';', 1)
-#
-#     passwd = passwd or ''
-#     myname = MACHINE_NAME or self.generateClientMachineName()
-#
-#     n = NetBIOS()
-#     names = n.queryIPForName(host)
-#     if names:
-#         server_name = names[0]
-#     else:
-#         raise urllib2.URLError('SMB error: Hostname does not reply back with its machine name')
-#
-#     path, attrs = splitattr(req.get_selector())
-#     if path.startswith('/'):
-#         path = path[1:]
-#     dirs = path.split('/')
-#     dirs = map(unquote, dirs)
-#     service, path = dirs[0], '/'.join(dirs[1:])
-#
-#     try:
-#         conn = SMBConnection(user, passwd, myname, server_name, domain=domain, use_ntlm_v2 = USE_NTLM)
-#         conn.connect(host, port)
-#     except:
-#         pass
+def local_downloader(location, filename):
+    '''
+    retrieve the file to a location on the localhost
+    '''
+    tw.line("Storing local archive: {}".format(location), bold=True)
+    with io.open(filename, 'rb') as src:
+        with io.open(filename, 'wb') as dst:
+            for chunk in iterchunks(src, 1024 * 100):
+                dst.write(chunk)
+
+
+def smb_downloader(location, filename):
+    '''
+    retrieve the file from and smb location, the username and password should
+    be a part of the location url if authentication is required.
+    '''
+    tw.line("Storing local archive: {}".format(location), bold=True)
+    director = urllib2.build_opener(smb.SMBHandler.SMBHandler)
+    src = director.open(location)
+    try:
+        with io.open(filename, 'wb') as dst:
+            while True:
+                chunk = src.read(1024 * 100)
+                if not chunk:
+                    break
+                dst.write(chunk)
+    finally:
+        src.close()
+
+
+DOWNLOADERS = {
+    '': local_downloader,
+    'smb': smb_downloader
+}
+
+
+def local_uploader(location, filename):
+    '''
+    persist the file to a location on the localhost
+    '''
+    tw.line("Storing local archive: {}".format(location), bold=True)
+    with io.open(filename, 'rb') as src:
+        with io.open(filename, 'wb') as dst:
+            for chunk in iterchunks(src, 1024 * 100):
+                dst.write(chunk)
+
+
+def smb_uploader(location, filename):
+    tw.line("Storing local archive: {}".format(location), bold=True)
+    director = urllib2.build_opener(smb.SMBHandler.SMBHandler)
+    with io.open(filename, 'rb') as src:
+        try:
+            dst = director.open(location, src)
+        finally:
+            dst.close()
+
+UPLOADERS = {
+    '': local_uploader,
+    'smb': smb_uploader,
+}
+
+
+def transfer_file(location, filename, schemas):
+    method = schemas.get(urlparse(STATE['location']).scheme)
+    method(location, filename)
