@@ -1,3 +1,17 @@
+'''
+pytest-dataplugin
+
+The dataplugin allows you to manage a directory of test data that lives outside
+your main code repository. The plugin targets the use case of when test data is
+larger than what you'd want to store with your code or otherwise contains
+things like binary data that doesn't makes sense to store with the main code
+repository.
+
+The test data directory can be ignored by git. The plugin creates an archive
+with a consistant hash. This hash is intended to be stored in file that gets
+commited to the repository. The plugin uses this hash to know if the data
+directory is out of date after.
+'''
 import sys
 import io
 import os
@@ -174,7 +188,6 @@ class ConsistantArchiveWriter(object):
         if not _thisdir:
             _thisdir = root
         for dirname, dirs, files in os.walk(_thisdir):
-            print('archive', dirname, dirs, files)
             for filename in sorted(files):
                 with open(os.path.join(dirname, filename), 'rb') as fp:
                     info = self.sanitize_info(self.tar.gettarinfo(fileobj=fp))
