@@ -422,7 +422,9 @@ def pytest_runtestloop(session):
             tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
             return True
         cache_filename = '.' + STATE['filename']
-        transfer_file(STATE['location'], cache_filename, UPLOADERS)
+        transfer_file(
+            STATE['location'], cache_filename, UPLOADER_SCHEMAS
+        )
         STATE['signature'] = shasum(cache_filename)
         STATE['return_code'] = 0
         tw.line(
@@ -449,7 +451,9 @@ def pytest_runtestloop(session):
         elif not find_signature(str(STATE['inifile']), STATE['signature_re']):
             tw.line("Signature not found in ini file {}".format(STATE['inifile']), red=True)
             return True
-        transfer_file(STATE['location'], '.' + STATE['filename'], DOWNLOADERS)
+        transfer_file(
+            STATE['location'], '.' + STATE['filename'], DOWNLOADER_SCHEMAS
+        )
         tw.line("file downloaded", green=True)
         STATE['return_code'] = 0
     else:
@@ -539,7 +543,7 @@ def boto3_downloader(location, filename):
         s3.download_fileobj(f, bucket, key)
 
 
-DOWNLOADERS = {
+DOWNLOADER_SCHEMAS = {
     '': local_downloader,
     'smb': smb_downloader,
     's3': boto3_downloader,
@@ -596,7 +600,7 @@ def parse_netloc_creds(netloc):
         return credpart.split(':', 1)
 
 
-UPLOADERS = {
+UPLOADER_SCHEMAS = {
     '': local_uploader,
     'smb': smb_uploader,
     's3': boto3_uploader,
