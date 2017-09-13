@@ -7,8 +7,6 @@ from helpers import PYTESTFILE, create_test_archive
 
 def test_dataplugin_update_when_no_inifile(testdir):
     testdir.makepyfile(PYTESTFILE)
-    testdir.mkdir('data')
-    testdir.makefile('txt', **{'data/testdata': 'some test data'})
     create_test_archive(testdir)
     result = testdir.runpytest_subprocess('--dataplugin-upload')
     assert result.errlines[-1].startswith('No ini file configured.')

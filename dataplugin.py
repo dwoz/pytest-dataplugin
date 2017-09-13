@@ -22,12 +22,15 @@ from functools import partial
 import re
 import py
 import pytest
-import urllib2
 
 try:
     from urllib.parse import urlparse
-except:
+except ImportError:
     from urlparse import urlparse
+try:
+    from urllib2 import build_opener
+except ImportError:
+    from urllib.request import build_opener
 try:
     import smb.SMBHandler
 except ImportError:
@@ -503,7 +506,7 @@ def smb_downloader(location, filename):
     be a part of the location url if authentication is required.
     '''
     tw.line("Storing local archive: {}".format(location), bold=True)
-    director = urllib2.build_opener(smb.SMBHandler.SMBHandler)
+    director = build_opener(smb.SMBHandler.SMBHandler)
     src = director.open(location)
     try:
         with io.open(filename, 'wb') as dst:
@@ -516,9 +519,30 @@ def smb_downloader(location, filename):
         src.close()
 
 
+def boto3_downloader(location, filename):
+    import boto3
+    's3://bucket/path'
+    prs = urlparse(location)
+    key = prs.path
+    creds = parse_netloc_creds(prs.netloc)
+    if creds:
+        bucket = prs.netloc.split('@', 1)[-1]
+        session = boto3.Session(
+            aws_access_key_id=creds[0],
+            aws_secret_access_key=creds[1],
+        )
+    else:
+        bucket = prs.netloc
+        session = boto3.Session()
+    s3 = session.client('s3')
+    with open(filename, "wb") as f:
+        s3.download_fileobj(f, bucket, key)
+
+
 DOWNLOADERS = {
     '': local_downloader,
-    'smb': smb_downloader
+    'smb': smb_downloader,
+    's3': boto3_downloader,
 }
 
 
@@ -528,7 +552,7 @@ def local_uploader(location, filename):
     '''
     tw.line("Storing local archive: {}".format(location), bold=True)
     with io.open(filename, 'rb') as src:
-        with io.open(filename, 'wb') as dst:
+        with io.open(location, 'wb') as dst:
             for chunk in iterchunks(src, 1024 * 100):
                 dst.write(chunk)
 
@@ -542,9 +566,40 @@ def smb_uploader(location, filename):
         finally:
             dst.close()
 
+def boto3_uploader(location, filename):
+    import boto3
+    's3://bucket/path'
+    prs = urlparse(location)
+    key = prs.path
+    creds = parse_netloc_creds(prs.netloc)
+    if creds:
+        bucket = prs.netloc.split('@', 1)[-1]
+        session = boto3.Session(
+            aws_access_key_id=creds[0],
+            aws_secret_access_key=creds[1],
+        )
+    else:
+        bucket = prs.netloc
+        session = boto3.Session()
+    s3 = session.client('s3')
+    with open(filename, "rb") as f:
+        s3.upload_fileobj(f, bucket, key)
+
+
+def parse_netloc_creds(netloc):
+    if netloc.find('@') == -1:
+        raise Exception("No Creds")
+    credpart, locpart = netloc.split('@', 1)
+    if credpart.find(':') == -1:
+        return credpart, None
+    else:
+        return credpart.split(':', 1)
+
+
 UPLOADERS = {
     '': local_uploader,
     'smb': smb_uploader,
+    's3': boto3_uploader,
 }
 
 

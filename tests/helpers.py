@@ -25,7 +25,6 @@ def create_test_archive(testdir, archive='.test-data.tar.gz', path='data', files
     datapath = str(testdir.tmpdir.join(path))
     dataplugin.create_archive(archive, datapath)
 
-
 def print_result(result):
     header = '*' * 40
     print(header + ' stderr ' + header)
