@@ -11,7 +11,7 @@ test_requires = [
 setup(
     name = 'pytest-dataplugin',
     py_modules = ['dataplugin'],
-    version = '0.0.0rc1',
+    version = '0.0.2',
     description = (
         'A pytest plugin for managing an archive of test data.'
     ),
