@@ -12,3 +12,5 @@ dist/*
 
 # setup.py build directory
 build/
+
+docs/_build/
