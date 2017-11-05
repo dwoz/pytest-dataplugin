@@ -1,7 +1,11 @@
 `pytest-dataplugin <https://github.com/dwoz/pytest-dataplugin>`_
 ================================================================
 
-`pytest-dataplugin <https://github.com/dwoz/pytest-dataplugin>`_ is a pytest plugin for managing an archive of test data that lives outide your code's repository.
+`documentation <http://pytest-dataplugin.readthedocs.io/>`_
+
+`pytest-dataplugin <https://github.com/dwoz/pytest-dataplugin>`_ is a pytest
+plugin for managing an archive of test data that lives outide your code's
+repository.
 
 
 The dataplugin allows you to manage a directory of test data that lives outside
