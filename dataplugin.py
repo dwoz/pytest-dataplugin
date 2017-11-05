@@ -459,7 +459,7 @@ def pytest_runtestloop(session):
     else:
         if verify_data_archive('.' + STATE['filename'], STATE['signature']):
             tw.line("Archive passed verification :)", green=True)
-            STATE['return_code'] =0
+            STATE['return_code'] = 0
         else:
             tw.line("Archive failed verification!", red=True)
             STATE['return_code'] = 1
@@ -473,13 +473,6 @@ def pytest_sessionfinish(session, exitstatus):
     return True
 
 
-# def pytest_report_collectionfinish(config, startdir, items):
-#     print(config.option.verbose)
-#
-# def pytest_report_teststatus(report):
-#     print(dir(report))
-
-
 @pytest.hookimpl(tryfirst=True)
 def pytest_terminal_summary(terminalreporter, exitstatus):
     '''
@@ -490,7 +483,6 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
     if STATE['action'] == NOOP:
         return
     terminalreporter.verbosity = -2
-    #sys.exit(STATE['return_code'])
 
 
 def local_downloader(location, filename):
